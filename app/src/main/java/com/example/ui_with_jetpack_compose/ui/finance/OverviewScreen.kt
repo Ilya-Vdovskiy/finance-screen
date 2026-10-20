@@ -18,6 +18,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
@@ -27,13 +32,21 @@ import androidx.compose.material.icons.filled.Coffee
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.LocalTaxi
 import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,8 +57,10 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 
 @Composable
 fun OverviewScreen(
@@ -54,9 +69,13 @@ fun OverviewScreen(
     onFill: () -> Unit,
     modifier: Modifier = Modifier,
     wide: Boolean = false,
+    themeMode: Int = 0,
+    onThemeModeChange: (Int) -> Unit = {},
+    demoMode: Int = 0,
+    onDemoModeChange: (Int) -> Unit = {},
 ) {
     if (wide && state is OverviewState.Ready) {
-        WideOverview(state.content, onTransactionClick, modifier)
+        WideOverview(state.content, onTransactionClick, modifier, themeMode, onThemeModeChange, demoMode, onDemoModeChange)
         return
     }
     LazyColumn(
@@ -64,7 +83,7 @@ fun OverviewScreen(
         contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        item { OverviewHeader() }
+        item { OverviewHeader(themeMode, onThemeModeChange, demoMode, onDemoModeChange) }
         when (state) {
             OverviewState.Loading -> {
                 item { BalanceSkeleton() }
@@ -96,6 +115,10 @@ private fun WideOverview(
     content: FinanceContent,
     onTransactionClick: (FinanceTransaction) -> Unit,
     modifier: Modifier = Modifier,
+    themeMode: Int,
+    onThemeModeChange: (Int) -> Unit,
+    demoMode: Int,
+    onDemoModeChange: (Int) -> Unit,
 ) {
     Row(
         modifier = modifier.fillMaxSize().padding(horizontal = 24.dp),
@@ -106,7 +129,7 @@ private fun WideOverview(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 24.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            item { OverviewHeader() }
+            item { OverviewHeader(themeMode, onThemeModeChange, demoMode, onDemoModeChange) }
             item { BalanceHero(content.totalKopecks) }
             item { SectionTitle("Мои счета") }
             items(content.accounts) { AccountCard(it) }
@@ -126,17 +149,45 @@ private fun WideOverview(
 }
 
 @Composable
-private fun OverviewHeader() {
+private fun OverviewHeader(
+    themeMode: Int,
+    onThemeModeChange: (Int) -> Unit,
+    demoMode: Int,
+    onDemoModeChange: (Int) -> Unit,
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.weight(1f)) {
             Text("Обзор", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("Мои финансы", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
         }
-        Box(
-            modifier = Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("И", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimary)
+        Box {
+            Box(
+                modifier = Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary)
+                    .clickable { menuExpanded = true }.semantics { contentDescription = "Открыть настройки темы и демо-режима" },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("И", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimary)
+            }
+            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                Text("Оформление", modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                listOf("Как в системе", "Светлая тема", "Тёмная тема").forEachIndexed { index, title ->
+                    DropdownMenuItem(
+                        text = { Text(title) },
+                        onClick = { onThemeModeChange(index); menuExpanded = false },
+                        trailingIcon = { if (themeMode == index) Icon(Icons.Default.Check, null) },
+                    )
+                }
+                HorizontalDivider()
+                Text("Состояние экрана", modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                listOf("Наполнено", "Загрузка", "Пусто").forEachIndexed { index, title ->
+                    DropdownMenuItem(
+                        text = { Text(title) },
+                        onClick = { onDemoModeChange(index); menuExpanded = false },
+                        trailingIcon = { if (demoMode == index) Icon(Icons.Default.Check, null) },
+                    )
+                }
+            }
         }
     }
 }
@@ -229,22 +280,31 @@ fun ExpenseBreakdown(content: FinanceContent, modifier: Modifier = Modifier) {
                         val inset = stroke / 2
                         val chartSize = Size(size.width - stroke, size.height - stroke)
                         var start = -90f
-                        content.categories.forEachIndexed { index, category ->
-                            val sweep = category.amountKopecks.toFloat() / content.expensesKopecks * 360f
-                            drawArc(colors[index % colors.size], start, sweep - 3f, false, Offset(inset, inset), chartSize, style = Stroke(stroke, cap = StrokeCap.Round))
-                            start += sweep
+                        if (content.expensesKopecks > 0) {
+                            content.categories.forEachIndexed { index, category ->
+                                val sweep = category.amountKopecks.toFloat() / content.expensesKopecks * 360f
+                                drawArc(colors[index % colors.size], start, (sweep - 3f).coerceAtLeast(0f), false, Offset(inset, inset), chartSize, style = Stroke(stroke, cap = StrokeCap.Round))
+                                start += sweep
+                            }
                         }
                     }
                     Text("100%", style = MaterialTheme.typography.titleMedium, color = scheme.onSurface)
                 }
                 Spacer(Modifier.width(19.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.weight(1f)) {
+                    var displayedPercent = 0
                     content.categories.forEachIndexed { index, category ->
+                        val percent = if (content.expensesKopecks == 0L) 0 else if (index == content.categories.lastIndex) {
+                            100 - displayedPercent
+                        } else {
+                            (category.amountKopecks * 100.0 / content.expensesKopecks).roundToInt()
+                        }
+                        displayedPercent += percent
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.size(9.dp).clip(CircleShape).background(colors[index % colors.size]))
                             Spacer(Modifier.width(8.dp))
                             Text(category.name, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant, modifier = Modifier.weight(1f), maxLines = 1)
-                            Text("${category.amountKopecks * 100 / content.expensesKopecks}%", style = MaterialTheme.typography.labelLarge, color = scheme.onSurface)
+                            Text("$percent%", style = MaterialTheme.typography.labelLarge, color = scheme.onSurface)
                         }
                     }
                 }
@@ -260,7 +320,10 @@ fun TransactionRow(transaction: FinanceTransaction, onClick: () -> Unit, modifie
     val positive = transaction.amountKopecks > 0
     Row(
         modifier = modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium)
-            .background(scheme.surface).clickable(onClick = onClick).padding(14.dp),
+            .background(scheme.surface)
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = "${transaction.title}, ${transaction.category}, ${formatRubles(transaction.amountKopecks, showPlus = true)}, ${transaction.date}. Открыть детали" }
+            .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -341,5 +404,12 @@ private fun SkeletonBlock(height: Int) {
 
 @Composable
 private fun SkeletonBar(width: Int, height: Int) {
-    Box(Modifier.width(width.dp).height(height.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant))
+    val transition = rememberInfiniteTransition(label = "Пульсация загрузки")
+    val alpha by transition.animateFloat(
+        initialValue = 0.45f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
+        label = "Яркость скелетона",
+    )
+    Box(Modifier.width(width.dp).height(height.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = alpha)))
 }
