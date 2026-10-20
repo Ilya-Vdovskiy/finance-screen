@@ -53,7 +53,12 @@ fun OverviewScreen(
     onTransactionClick: (FinanceTransaction) -> Unit,
     onFill: () -> Unit,
     modifier: Modifier = Modifier,
+    wide: Boolean = false,
 ) {
+    if (wide && state is OverviewState.Ready) {
+        WideOverview(state.content, onTransactionClick, modifier)
+        return
+    }
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 32.dp),
@@ -81,6 +86,40 @@ fun OverviewScreen(
                 items(content.transactions, key = { it.id }) { transaction ->
                     TransactionRow(transaction, onClick = { onTransactionClick(transaction) })
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WideOverview(
+    content: FinanceContent,
+    onTransactionClick: (FinanceTransaction) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.fillMaxSize().padding(horizontal = 24.dp),
+        horizontalArrangement = Arrangement.spacedBy(22.dp),
+    ) {
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 24.dp, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            item { OverviewHeader() }
+            item { BalanceHero(content.totalKopecks) }
+            item { SectionTitle("Мои счета") }
+            items(content.accounts) { AccountCard(it) }
+        }
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 24.dp, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(15.dp),
+        ) {
+            item { ExpenseBreakdown(content) }
+            item { SectionTitle("Последние операции") }
+            items(content.transactions, key = { it.id }) { transaction ->
+                TransactionRow(transaction, onClick = { onTransactionClick(transaction) })
             }
         }
     }
